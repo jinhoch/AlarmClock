@@ -31,12 +31,54 @@
 #include "stdio.h"
 #include "LCD.h"
 
-
 #define LONG_CLICK_MIN 1500  //1.5sec
 #define LONG_CLICK_MAX 5000  //5sec
 
-#define DOUBLE_CLICK_MIN 15
+#define DOUBLE_CLICK_MIN 20
 #define DOUBLE_CLICK_MAX 120
+
+
+
+
+
+//flash 메모리 Bank1,Bank2
+
+
+/* Base address of the Flash sectors Bank 1 */
+#define ADDR_FLASH_SECTOR_0     ((uint32_t*)0x08000000) /* Base @ of Sector 0, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_1     ((uint32_t*)0x08004000) /* Base @ of Sector 1, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_2     ((uint32_t*)0x08008000) /* Base @ of Sector 2, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_3     ((uint32_t*)0x0800C000) /* Base @ of Sector 3, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_4     ((uint32_t*)0x08010000) /* Base @ of Sector 4, 64 Kbytes */
+#define ADDR_FLASH_SECTOR_5     ((uint32_t*)0x08020000) /* Base @ of Sector 5, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_6     ((uint32_t*)0x08040000) /* Base @ of Sector 6, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_7     ((uint32_t*)0x08060000) /* Base @ of Sector 7, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_8     ((uint32_t*)0x08080000) /* Base @ of Sector 8, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_9     ((uint32_t*)0x080A0000) /* Base @ of Sector 9, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_10    ((uint32_t*)0x080C0000) /* Base @ of Sector 10, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_11    ((uint32_t*)0x080E0000) /* Base @ of Sector 11, 128 Kbytes */
+
+/* Base address of the Flash sectors Bank 2 */
+#define ADDR_FLASH_SECTOR_12     ((uint32_t*)0x08100000) /* Base @ of Sector 0, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_13     ((uint32_t*)0x08104000) /* Base @ of Sector 1, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_14     ((uint32_t*)0x08108000) /* Base @ of Sector 2, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_15     ((uint32_t*)0x0810C000) /* Base @ of Sector 3, 16 Kbytes */
+#define ADDR_FLASH_SECTOR_16     ((uint32_t*)0x08110000) /* Base @ of Sector 4, 64 Kbytes */
+#define ADDR_FLASH_SECTOR_17     ((uint32_t*)0x08120000) /* Base @ of Sector 5, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_18     ((uint32_t*)0x08140000) /* Base @ of Sector 6, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_19     ((uint32_t*)0x08160000) /* Base @ of Sector 7, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_20     ((uint32_t*)0x08180000) /* Base @ of Sector 8, 128 Kbytes  */
+#define ADDR_FLASH_SECTOR_21     ((uint32_t*)0x081A0000) /* Base @ of Sector 9, 128 Kbytes  */
+#define ADDR_FLASH_SECTOR_22     ((uint32_t*)0x081C0000) /* Base @ of Sector 10, 128 Kbytes */
+#define ADDR_FLASH_SECTOR_23     ((uint32_t*)0x081E0000) /* Base @ of Sector 11, 128 Kbytes */
+
+//23->22->21.... 사용
+
+#define MAGIC_NUM 0xdeadbeef
+#define nv_items ((NVitemTypeDef*)ADDR_FLASH_SECTOR_23)
+
+
+
 
 /* USER CODE END Includes */
 
@@ -64,41 +106,43 @@ RTC_TimeTypeDef sTime = { 0 };
 RTC_DateTypeDef sDate = { 0 };
 
 uint16_t ADC_Value;
+
 uint32_t last_time;
 uint32_t current_time;
 uint32_t time_interval;
 uint32_t last_time_interval;
+
 uint8_t cursor_change = 0;
+uint8_t mode_flag = 0;
+uint8_t setting_flag = 0;
+uint8_t Alarm_flag = 0;
+uint8_t hfsec_flag = 0;
 
+uint32_t timer = 0;
+uint32_t timer_hfsec = 0;
+uint32_t timer_flag = 0;
 
-typedef enum{
-	UP = 1,
-	DOWN,
-	RIGHT,
-	LEFT,
-	BASIC
-}Clock_button;
+uint32_t value;
 
-typedef enum{
-	NORMAL = 0,
-	TIME_SETTING,
-	ALARM_TIME_SETTING,
-	MUSIC_SELECT
-}Clock_mode;
+typedef enum {
+	UP = 1, DOWN, RIGHT, LEFT, BASIC
+} Clock_button;
 
-typedef enum{
-	Three_Bears = 1,
-	Spring_Water
-}Clock_music;
+typedef enum {
+	NORMAL = 0, TIME_SETTING, ALARM_TIME_SETTING, MUSIC_SELECT
+} Clock_mode;
 
-typedef struct{
+typedef enum {
+	Three_Bears = 0, Spring_Water
+} Clock_music;
+
+typedef struct {
 	Clock_mode mode;
 	Clock_button button;
 	Clock_music music;
-}Clock_state;
+} Clock_state;
 
-
-typedef struct{
+typedef struct {
 	int16_t Hour1;
 	int16_t Hour2;
 	int16_t Min1;
@@ -107,36 +151,51 @@ typedef struct{
 	int16_t Sec2;
 	int16_t Ampm;
 
-}Clock_time;
+} Clock_time;
 
-
-typedef struct{
-	uint16_t one_flag;
-	uint16_t alarm_flag;
-	uint16_t two_flag;
-
-}Flag;
-
+typedef struct {
+	int32_t time;
+	GPIO_PinState level;
+} ClickInfoDef;
 
 typedef struct{
-  int32_t time;
-  GPIO_PinState level;
-}ClickInfoDef;
-
+	uint32_t magic_num;
+	Clock_time setting_time;
+	Clock_time alarm_time;
+	int8_t alarm_music_num;
+}NVitemTypeDef;
 
 ClickInfoDef click[3];
 
-Clock_state  now_state;
+Clock_state now_state;
 
-Clock_time buf_time;
-Clock_time now_time;
-Clock_time alarm_time;
+enum notes {
+	C = 956, D = 852, E = 758, F = 716, G = 638
+};
+
+uint16_t music1_notes[]={
+		F,G,G,E,E,D,D,C,C,C,D,E,F,G,G,E,E,D,D,C,C,F,G,D,C,C,C,C,G,D,D,D,G,D,G,G,F,E,C,F,E,C,F,E,D,D,F,G,G,E,E
+		,D,D,C,C,C,D,E,F,G,G,E,E,D,D,C,D,D,C,G
+};
+
+uint8_t music1_notes_length = sizeof(music1_notes)/sizeof(uint16_t);
+
+NVitemTypeDef default_nvitem = {
+		MAGIC_NUM,
+		{0,0,0},
+		{0,0,0},
+		0
+};
 
 
-Flag flag;
+//uint32_t music2_notes[]={
+//
+//};
 
-
-
+/*
+ * 파솔솔미미 레레 도도 도레 미 파솔 솔 미미 레레 도 도 파 솔 레 도 라도도 도라 솔레레 레솔 솔 파
+ * 미도 파 미도 파 미 레 레 파솔솔미미 레레 도도 도레 미 파솔 솔 미미 레레 도 레 레 도 솔
+ */
 
 /* USER CODE END PV */
 
@@ -146,14 +205,18 @@ static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 void ADC_button();
 void LCD_Cursor(int rownum, int column);
-void blink(uint8_t location);
-void set_time(uint16_t Ampm,uint16_t hour1,uint16_t hour2,uint16_t min1,uint16_t min2,uint16_t sec1,uint16_t sec2);
-uint16_t value_limit(int16_t value);
-void clock();
-void Normal_mode();
-void Time_setting_mode();
-void Alarm_setting_mode();
+void blink(uint8_t location,Clock_time* buf_time);
+void set_time(Clock_time* now_time);
+uint16_t Up_Down_value_limit(int16_t value);
+void init_time();
+void clock(Clock_time* buf_time,Clock_time* now_time,Clock_time* alarm_time);
+void Normal_mode(Clock_time* alarm_time);
+void Time_or_Alarm_change_mode(Clock_time* buf_time,Clock_time* now_time,Clock_time* alarm_time);
 void Music_select_mode();
+void Alarm(Clock_time* alarm_time);
+
+void Alarm_Spring_Water_paly();
+void Alarm_Three_Bears_play();
 
 /* USER CODE END PFP */
 
@@ -165,215 +228,204 @@ int __io_putchar(int ch) {
 	return ch;
 }
 
-
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
-  /* USER CODE BEGIN 1 */
-  /* USER CODE END 1 */
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
+	/* USER CODE BEGIN 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_ADC1_Init();
-  MX_RTC_Init();
-  MX_USART3_UART_Init();
-  MX_I2C1_Init();
-  MX_TIM2_Init();
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_ADC1_Init();
+	MX_RTC_Init();
+	MX_USART3_UART_Init();
+	MX_I2C1_Init();
+	MX_TIM2_Init();
+	MX_TIM3_Init();
 
-  /* Initialize interrupts */
+	/* Initialize interrupts */
 	MX_NVIC_Init();
 	/* USER CODE BEGIN 2 */
 	init();
 	HAL_TIM_Base_Init(&htim2);
 	HAL_TIM_Base_Start_IT(&htim2);
+	HAL_TIM_Base_Init(&htim3);
+	init_time();
 
-	now_state.mode = NORMAL;
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 
-  /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+
+	Clock_time buf_time;
+	Clock_time now_time;
+	Clock_time alarm_time;
+
+	memset(&buf_time,0,sizeof(Clock_time));
+	memset(&now_time,0,sizeof(Clock_time));
+	memset(&alarm_time,0,sizeof(Clock_time));
+
+	/* USER CODE END 2 */
+
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
 	while (1) {
 
 		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
 		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
 
+		clock(&buf_time,&now_time,&alarm_time);
 
-		clock();
+		/* USER CODE END WHILE */
 
-
-
-
-
-
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
+		/* USER CODE BEGIN 3 */
 	}
-  /* USER CODE END 3 */
+	/* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
+	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+	/** Configure the main internal regulator output voltage
+	 */
+	__HAL_RCC_PWR_CLK_ENABLE();
+	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE;
-  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 180;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
+	 */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI
+			| RCC_OSCILLATORTYPE_LSE;
+	RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+	RCC_OscInitStruct.PLL.PLLM = 8;
+	RCC_OscInitStruct.PLL.PLLN = 180;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+	RCC_OscInitStruct.PLL.PLLQ = 4;
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Activate the Over-Drive mode
-  */
-  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Activate the Over-Drive mode
+	 */
+	if (HAL_PWREx_EnableOverDrive() != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
+	/** Initializes the CPU, AHB and APB buses clocks
+	 */
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
+		Error_Handler();
+	}
 }
 
 /**
-  * @brief NVIC Configuration.
-  * @retval None
-  */
-static void MX_NVIC_Init(void)
-{
-  /* RCC_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(RCC_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(RCC_IRQn);
-  /* TIM2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(TIM2_IRQn);
-  /* USART3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(USART3_IRQn);
-  /* EXTI15_10_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+ * @brief NVIC Configuration.
+ * @retval None
+ */
+static void MX_NVIC_Init(void) {
+	/* RCC_IRQn interrupt configuration */
+	HAL_NVIC_SetPriority(RCC_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(RCC_IRQn);
+	/* TIM2_IRQn interrupt configuration */
+	HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(TIM2_IRQn);
+	/* USART3_IRQn interrupt configuration */
+	HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(USART3_IRQn);
+	/* EXTI15_10_IRQn interrupt configuration */
+	HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	GPIO_PinState pin;
+	int i;
 
+	if (GPIO_Pin == GPIO_PIN_13) {
+		current_time = HAL_GetTick();
+		time_interval = current_time - last_time;
+		last_time = current_time;
 
+		pin = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
 
+		if (time_interval <= 2) // noise
+				{
+		} else {
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  GPIO_PinState pin;
-  int i;
+			click[2].time = click[1].time;
+			click[2].level = click[1].level;
 
+			click[1].time = click[0].time;
+			click[1].level = click[0].level;
 
-  if(GPIO_Pin == GPIO_PIN_13)
-  {
-	current_time = HAL_GetTick();
-    time_interval = current_time - last_time;
-    last_time = current_time;
+			click[0].time = time_interval;
+			click[0].level = pin;
 
-    pin = HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_13);
+			if (click[2].level == GPIO_PIN_RESET
+					&& click[1].level == GPIO_PIN_SET
+					&& click[0].level == GPIO_PIN_RESET) {
+				for (i = 0; i < 3; i++) {
+					if (click[i].time >= DOUBLE_CLICK_MIN
+							&& click[i].time <= DOUBLE_CLICK_MAX) {
+						continue;
+					} else
+						break;
+				}
+				if (i == 3) {
+					now_state.mode = MUSIC_SELECT;
+				}
+			}
 
-//	printf("<%d,%d>\r\n",pin,time_interval);
+			if (click[0].level== GPIO_PIN_RESET&& click[0].time >=LONG_CLICK_MIN) // long click
+					{
+				now_state.mode = ALARM_TIME_SETTING;
+			} else if (click[0].level== GPIO_PIN_RESET&& click[0].time < LONG_CLICK_MIN && click[0].time > DOUBLE_CLICK_MAX) {
+				if (now_state.mode == TIME_SETTING
+						|| now_state.mode == ALARM_TIME_SETTING
+						|| now_state.mode == MUSIC_SELECT) mode_flag = 1;
+				else mode_flag = 0;
+				if (mode_flag == 0) now_state.mode = TIME_SETTING;
+				else if (mode_flag == 1) now_state.mode = NORMAL;
+			}
 
-    if(time_interval<=2) // noise
-    {
-//    	printf("Noise %d,%d\r\n",pin,time_interval);
-    }
-    else
-    {
-
-      click[2].time = click[1].time;
-      click[2].level = click[1].level;
-
-      click[1].time = click[0].time;
-      click[1].level = click[0].level;
-
-      click[0].time = time_interval;
-      click[0].level = pin;
-
-      if( click[2].level ==GPIO_PIN_RESET && click[1].level == GPIO_PIN_SET &&  click[0].level ==GPIO_PIN_RESET)
-      {
-    	  for(i=0;i<3;i++)
-    	  {
-    		  if(click[i].time>= DOUBLE_CLICK_MIN && click[i].time <= DOUBLE_CLICK_MAX)
-    		  {
-    			  continue;
-    		  }
-    		  else
-    			  break;
-    	  }
-    	  if(i==3)
-    	  {
-    		  now_state.mode = MUSIC_SELECT;
-    	  }
-      }
-
-	  if(click[0].level == GPIO_PIN_RESET && click[0].time >=LONG_CLICK_MIN) // long click
-	  {
-		  now_state.mode = ALARM_TIME_SETTING;
-	  }
-	  else if(click[0].level == GPIO_PIN_RESET && click[0].time < LONG_CLICK_MIN && click[0].time > DOUBLE_CLICK_MAX)
-	  {
-		  now_state.mode ^= TIME_SETTING;
-	  }
-
-    }
-  }
+		}
+	}
 
 }
 
@@ -381,103 +433,150 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if (htim->Instance == TIM2) {
 		ADC_button();
+		timer++;
+		if(hfsec_flag == 1){
+			timer_flag++;
+			if(timer_flag % 5 == 0){
+				hfsec_flag = 0;
+			}
+		}
 	}
-
 }
 
-
-void ADC_button(){
+//ADC값 변화에 따른 버튼
+void ADC_button() {
 	HAL_ADC_Start(&hadc1);
 	ADC_Value = HAL_ADC_GetValue(&hadc1);
 
-	if(ADC_Value <= 100) now_state.button = UP;
-	else if(ADC_Value>= 800 && ADC_Value<=900 ) now_state.button = DOWN;
-	else if(ADC_Value>= 1900 && ADC_Value<=2000) now_state.button = LEFT;
-	else if(ADC_Value>= 2900 && ADC_Value<=3100) now_state.button = RIGHT;
+	if (ADC_Value <= 100) now_state.button = UP;
+	else if (ADC_Value >= 800 && ADC_Value <= 900) now_state.button = DOWN;
+	else if (ADC_Value >= 1900 && ADC_Value <= 2000) now_state.button = LEFT;
+	else if (ADC_Value >= 2900 && ADC_Value <= 3100) now_state.button = RIGHT;
 	else now_state.button = BASIC;
 }
 
+
+//LCD_Cursor 위치 변경(16x2)
 void LCD_Cursor(int row, int column) {
-	if (row == 1)row = 0x40;
+	if (row == 1) row = 0x40;
 	LCD_SendCommand(LCD_ADDR, 0x80 | (row | column));
 }
 
-void set_time(uint16_t Ampm,uint16_t hour1,uint16_t hour2,uint16_t min1,uint16_t min2,uint16_t sec1,uint16_t sec2){
-
-
-
-	sTime.TimeFormat = Ampm;
-	sTime.Hours = hour1<<4 | hour2;
-	sTime.Minutes = min1<<4 | min2;
-	sTime.Seconds = sec1<<4 | sec2;
-
-	if(sTime.Hours > 0x12) sTime.Hours = 0x10;
-
+//am 0시 0분 0초 초기화
+void init_time() {
+	sTime.TimeFormat = 0;
+	sTime.Hours = 0;
+	sTime.Minutes = 0;
+	sTime.Seconds = 0;
 
 	HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
 }
 
 
-void blink(uint8_t location){
+//매개변수의 시간으로 setTime
+void set_time(Clock_time* now_time) {
 
-	sprintf(temp,"%s %02x:%02x:%02x",sTime.TimeFormat[ampm],sTime.Hours,sTime.Minutes,sTime.Seconds);
-	LCD_Cursor(1,0);
-	LCD_SendString(LCD_ADDR, temp);
+	sTime.TimeFormat = now_time->Ampm;
+	sTime.Hours = now_time->Hour1 << 4 | now_time->Hour2;
+	sTime.Minutes = now_time->Min1 << 4 | now_time->Min2;
+	sTime.Seconds = now_time->Sec1 << 4 | now_time->Sec2;
 
-	if(location == 0){
-		LCD_Cursor(1,location);
-		LCD_SendString(LCD_ADDR, "  ");
-	}else{
-		LCD_Cursor(1,location);
-		LCD_SendData(LCD_ADDR, ' ');
-	}
+	if (sTime.Hours > 0x12) sTime.Hours = 0x10;
+
+	HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
 }
 
 
-uint16_t value_limit(int16_t value){
-	if(now_state.button == UP) value++;
-	else if(now_state.button == DOWN) value--;
-	if(value > 9) value = 0;
-	if(value < 0) value = 9;
+//시간,알람시간 변경시 깜빡거림을 표현
+void blink(uint8_t location,Clock_time* buf_time) {
+
+	uint16_t AMpm;
+	uint16_t hour;
+	uint16_t min;
+	uint16_t sec;
+
+	AMpm = buf_time->Ampm;
+	hour = buf_time->Hour1 << 4 | buf_time->Hour2;
+	min = buf_time->Min1 << 4 | buf_time->Min2;
+	sec = buf_time->Sec1 << 4 | buf_time->Sec2;
+
+	sprintf(temp, "%s %02x:%02x:%02x", ampm[AMpm], hour, min, sec);
+	LCD_Cursor(1, 0);
+	LCD_SendString(LCD_ADDR, temp);
+
+	if (timer % 3 == 0) {
+		if (location == 0) {
+			LCD_Cursor(1, location);
+			LCD_SendString(LCD_ADDR, "  ");
+		} else {
+			LCD_Cursor(1, location);
+			LCD_SendData(LCD_ADDR, ' ');
+		}
+	}
+
+}
+
+//시간, 알람시간 변경모드 에서 버튼에 따른 값 변화 그리고 시계처럼 제한 두는 함수
+uint16_t Up_Down_value_limit(int16_t value) {
+	if (now_state.button == UP)
+		value++;
+	else if (now_state.button == DOWN)
+		value--;
+	if (value > 9)
+		value = 0;
+	if (value < 0)
+		value = 9;
 
 	return value;
 }
 
+//모드에 맞게 동작하는 시계
+void clock(Clock_time* buf_time,Clock_time* now_time,Clock_time* alarm_time) {
+
+	if (now_state.mode == NORMAL) Normal_mode(alarm_time);
+	else if (now_state.mode == TIME_SETTING|| now_state.mode == ALARM_TIME_SETTING) Time_or_Alarm_change_mode(buf_time,now_time,alarm_time);
+	else if (now_state.mode == MUSIC_SELECT) Music_select_mode();
 
 
-
-void clock(){
-
-	if(now_state.mode == NORMAL) Normal_mode();
-	else if(now_state.mode == TIME_SETTING)  Time_setting_mode();
-	else if(now_state.mode == ALARM_TIME_SETTING) Time_setting_mode();
-	else if(now_state.mode == MUSIC_SELECT) Music_select_mode();
 }
 
 
+//기본적으로 시간이 흐르는 모드
+void Normal_mode(Clock_time* alarm_time) {
 
-void Normal_mode(){
-
-	LCD_Cursor(0,0);
-	LCD_SendString(LCD_ADDR, "Jin Ho Clock");
-	sprintf(temp,"%s %02x:%02x:%02x",sTime.TimeFormat[ampm],sTime.Hours,sTime.Minutes,sTime.Seconds);
-	LCD_Cursor(1,0);
+	LCD_Cursor(0, 0);
+	LCD_SendString(LCD_ADDR, "Jin Ho Clock ");
+	sprintf(temp, "%s %02x:%02x:%02x", sTime.TimeFormat[ampm], sTime.Hours, sTime.Minutes, sTime.Seconds);
+	LCD_Cursor(1, 0);
 	LCD_SendString(LCD_ADDR, temp);
+	if (Alarm_flag == 1) {
+		LCD_Cursor(1, 11);
+		LCD_SendString(LCD_ADDR, "  AL");
+	} else {
+		LCD_Cursor(1, 11);
+		LCD_SendString(LCD_ADDR, "     ");
+	}
+
+	Alarm(alarm_time);
 }
 
-void Time_setting_mode(){
 
-	LCD_Cursor(0,0);
-	LCD_SendString(LCD_ADDR, "Time Setting");
 
-	now_time.Ampm = sTime.TimeFormat;
-	now_time.Hour1 = (sTime.Hours & 0xf0) >> 4;
-	now_time.Hour2 = sTime.Hours & 0x0f;
-	now_time.Min1 = (sTime.Minutes & 0xf0) >> 4;
-	now_time.Min2 = sTime.Minutes & 0x0f;
-	now_time.Sec1 = (sTime.Seconds & 0xf0) >> 4;
-	now_time.Sec2 = sTime.Seconds & 0x0f;
 
+//시간 변경 모드(버튼 한번) 또는 알람 시간 변경 모드(버튼 길게 3초이상)
+void Time_or_Alarm_change_mode(Clock_time* buf_time,Clock_time* now_time,Clock_time* alarm_time) {
+
+	if (setting_flag == 0) {
+		buf_time->Ampm = sTime.TimeFormat;
+		buf_time->Hour1 = (sTime.Hours & 0xf0) >> 4;
+		buf_time->Hour2 = sTime.Hours & 0x0f;
+		buf_time->Min1 = (sTime.Minutes & 0xf0) >> 4;
+		buf_time->Min2 = sTime.Minutes & 0x0f;
+		buf_time->Sec1 = (sTime.Seconds & 0xf0) >> 4;
+		buf_time->Sec2 = sTime.Seconds & 0x0f;
+
+		setting_flag = 1;
+	}
 
 	switch (now_state.button) {
 	case RIGHT:
@@ -485,441 +584,206 @@ void Time_setting_mode(){
 		break;
 	case LEFT:
 		cursor_change--;
-		if (cursor_change < 0)cursor_change = 0;
+		if (cursor_change < 0)
+			cursor_change = 0;
 		break;
 	default:
 		break;
 	}
 
-
-	switch(cursor_change%7){
+	switch (cursor_change % 7) {
 	case 0:
-		blink(0);
-		if(now_state.button == UP || now_state.button == DOWN) now_time.Ampm ^= 1;
+		blink(0,buf_time);
+		if (now_state.button == UP || now_state.button == DOWN)
+			buf_time->Ampm ^= 1;
 		break;
 	case 1:
-		blink(3);
-		if(now_state.button == UP || now_state.button == DOWN) now_time.Hour1 ^= 1;
+		blink(3,buf_time);
+		if (now_state.button == UP || now_state.button == DOWN)
+			buf_time->Hour1 ^= 1;
 		break;
 	case 2:
-		blink(4);
-		now_time.Hour2 = value_limit(now_time.Hour2);
+		blink(4,buf_time);
+		buf_time->Hour2 = Up_Down_value_limit(buf_time->Hour2);
 		break;
 	case 3:
-		blink(6);
-		now_time.Min1 = value_limit(now_time.Min1);
+		blink(6,buf_time);
+		buf_time->Min1 = Up_Down_value_limit(buf_time->Min1);
+		if (buf_time->Min1 > 5)
+			buf_time->Min1 = 0;
 		break;
 	case 4:
-		blink(7);
-		now_time.Min2 = value_limit(now_time.Min2);
+		blink(7,buf_time);
+		buf_time->Min2 = Up_Down_value_limit(buf_time->Min2);
 		break;
 	case 5:
-		blink(9);
-		now_time.Sec1 = value_limit(now_time.Sec1);
+		blink(9,buf_time);
+		buf_time->Sec1 = Up_Down_value_limit(buf_time->Sec1);
+		if (buf_time->Sec1 > 5)
+			buf_time->Sec1 = 0;
 		break;
 	case 6:
-		blink(10);
-		now_time.Sec2 = value_limit(now_time.Sec2);
+		blink(10,buf_time);
+		buf_time->Sec2 = Up_Down_value_limit(buf_time->Sec2);
 		break;
 	default:
 		break;
 	}
 
-	if(now_time.Min1 > 5) now_time.Min1 = 0;
-	if(now_time.Sec1 > 5) now_time.Sec1 = 0;
+	if ((buf_time->Hour1 << 4 | buf_time->Hour2) > 0x12) buf_time->Hour2 = 0;
 
-	set_time(now_time.Ampm,now_time.Hour1,now_time.Hour2,now_time.Min1,now_time.Min2,now_time.Sec1,now_time.Sec2);
+	if (now_state.mode == TIME_SETTING) {
+		LCD_Cursor(0, 0);
+		LCD_SendString(LCD_ADDR, "Time Setting");
+		LCD_Cursor(1, 11);
+		LCD_SendString(LCD_ADDR, "     ");
+
+		now_time = buf_time;
+		now_time->Ampm = buf_time->Ampm;
+		now_time->Hour1 = buf_time -> Hour1;
+		now_time->Hour2 = buf_time -> Hour2;
+		now_time->Min1 = buf_time -> Min1;
+		now_time->Min2 = buf_time -> Min2;
+		now_time->Sec1 = buf_time -> Sec1;
+		now_time->Sec2 = buf_time -> Sec2;
+
+		set_time(now_time);
+	}
+
+	else if (now_state.mode == ALARM_TIME_SETTING) {
+		LCD_Cursor(0, 0);
+		LCD_SendString(LCD_ADDR, "Alarm Setting");
+		LCD_Cursor(1, 11);
+		LCD_SendString(LCD_ADDR, "  AL  ");
 
 
+		alarm_time->Ampm = buf_time->Ampm;
+		alarm_time->Hour1 = buf_time -> Hour1;
+		alarm_time->Hour2 = buf_time -> Hour2;
+		alarm_time->Min1 = buf_time -> Min1;
+		alarm_time->Min2 = buf_time -> Min2;
+		alarm_time->Sec1 = buf_time -> Sec1;
+		alarm_time->Sec2 = buf_time -> Sec2;
+
+
+		Alarm_flag ^= 1;
+	}
 
 }
 
-void Alarm_setting_mode(){
-	LCD_Cursor(0,0);
-	LCD_SendString(LCD_ADDR, "Alarm Setting");
+//음악 선택하는 모드(더블클릭)
+void Music_select_mode() {
 
-	alarm_time.Ampm = sTime.TimeFormat;
-	alarm_time.Hour1 = (sTime.Hours & 0xf0) >> 4;
-	alarm_time.Hour2 = sTime.Hours & 0x0f;
-	alarm_time.Min1 = (sTime.Minutes & 0xf0) >> 4;
-	alarm_time.Min2 = sTime.Minutes & 0x0f;
-	alarm_time.Sec1 = (sTime.Seconds & 0xf0) >> 4;
-	alarm_time.Sec2 = sTime.Seconds & 0x0f;
+	if (now_state.button == UP || now_state.button == DOWN) now_state.music ^= Spring_Water;
+
+	LCD_Cursor(0, 0);
+	LCD_SendString(LCD_ADDR, "Music select");
+	LCD_Cursor(1, 0);
+	if (now_state.music == Three_Bears) sprintf(temp, "%s", "[Three Bears] ");
+	else if (now_state.music == Spring_Water) sprintf(temp, "%s", "[Spring_Water] ");
+	LCD_SendString(LCD_ADDR, temp);
+
+}
+
+//현재시간과 알람시간이 같을때 울리기
+void Alarm(Clock_time* alarm_time) {
+
+	uint16_t a_ampm;
+	uint16_t a_hour;
+	uint16_t a_min;
+	uint16_t a_sec;
+
+	a_ampm = alarm_time->Ampm;
+	a_hour = alarm_time->Hour1 << 4 | alarm_time->Hour2;
+	a_min = alarm_time->Min1 << 4 | alarm_time->Min2;
+	a_sec = alarm_time->Sec1 << 4 | alarm_time->Sec2;
 
 
-	switch (now_state.button) {
-	case RIGHT:
-		cursor_change++;
-		break;
-	case LEFT:
-		cursor_change--;
-		if (cursor_change < 0)cursor_change = 0;
-		break;
-	default:
-		break;
+	if ((Alarm_flag == 1) && (sTime.TimeFormat == a_ampm)
+			&& (sTime.Hours == a_hour) && (sTime.Minutes == a_min)
+			&& (sTime.Seconds == a_sec) && (now_state.mode == NORMAL)) {
+
+		if(now_state.music == Spring_Water) printf("\r\n Spring_Water_play \r\n");
+		else printf("\r\n Three_Bears_play \r\n");
+
+		Alarm_flag = 0;
+	}
+}
+
+
+//timer 10씩 커질때마다 1초
+
+//알람 노래 Spring_Water_paly
+void Alarm_Spring_Water_paly(){
+
+
+	uint16_t melody = (uint16_t) (1000000 / music[seq].freq);
+	uint8_t num = 0;
+
+	if (default_nvitem.alarm_music_num == 0) num = MEL_NUM;
+	else if (default_nvitem.alarm_music_num == 1) num = MEL_NUM;
+	else if (default_nvitem.alarm_music_num == 2) num = MEL_NUM + 1;
+
+	if (stop == 1) {
+		TIM4->ARR = 2000;
+		HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_2);
+		stop = 0;
+	} else {
+		if (seq == num) {
+			seq = 0;
+		} else {
+			TIM3->ARR = melody;
+			TIM3->CCR2 = melody / 2;
+			TIM4->ARR = music[seq].delay * 2000;
+			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+			stop = 1;
+
+			seq++;
+			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);
+		}
 	}
 
 
-	switch(cursor_change%7){
-	case 0:
-		blink(0);
-		if(now_state.button == UP || now_state.button == DOWN) now_time.Ampm ^= 1;
-		break;
-	case 1:
-		blink(3);
-		if(now_state.button == UP || now_state.button == DOWN) now_time.Hour1 ^= 1;
-		break;
-	case 2:
-		blink(4);
-		now_time.Hour2 = value_limit(now_time.Hour2);
-		break;
-	case 3:
-		blink(6);
-		now_time.Min1 = value_limit(now_time.Min1);
-		break;
-	case 4:
-		blink(7);
-		now_time.Min2 = value_limit(now_time.Min2);
-		break;
-	case 5:
-		blink(9);
-		now_time.Sec1 = value_limit(now_time.Sec1);
-		break;
-	case 6:
-		blink(10);
-		now_time.Sec2 = value_limit(now_time.Sec2);
-		break;
-	default:
-		break;
+	for (int i = 0; i < music1_notes_length; i++) {
+		TIM3->ARR = music1_notes[i];
+		TIM3->CCR4 = TIM3->ARR / 2;
+		HAL_Delay(500);
 	}
 
-	if(now_time.Min1 > 5) now_time.Min1 = 0;
-	if(now_time.Sec1 > 5) now_time.Sec1 = 0;
+	TIM3->CCR4 = 0;
+	HAL_Delay(10);
+	TIM3->CCR4 = TIM3->ARR / 2;
 
 
-}
-
-
-
-void Music_select_mode(){
 
 }
-
-
-//void clock_display() {
-//
-//	// set address to 0x00
-//	LCD_SendCommand(LCD_ADDR, 0b10000000);
-//	LCD_SendString(LCD_ADDR, "jinho clock");
-//
-//	// set address to 0x40
-//	LCD_SendCommand(LCD_ADDR, 0b11000000);
-//	LCD_SendString(LCD_ADDR, temp);
-//
-//}
-//
-//void set_time(uint16_t am_pm, uint16_t hours, uint16_t min, uint16_t sec) {
-//	sTime.TimeFormat = am_pm;
-//	sTime.Hours = hours;
-//	sTime.Minutes = min;
-//	sTime.Seconds = sec;
-//	if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-//		Error_Handler();
-//}
-//
-//uint8_t adc_polling() {
-//
-////	uint16_t adc_value;
-//
-//	HAL_ADC_Start(&hadc1);
-//	//HAL_ADC_PollForConversion(&hadc1, 10);
-//	adc_value = HAL_ADC_GetValue(&hadc1);
-////	HAL_ADC_Stop(&hadc1);
-//
-//	if (1900 <= adc_value && adc_value <= 2000) {
-//		//Left
-//		return 1;
-//	}
-//	if (0 <= adc_value && adc_value <= 100) {
-//		//Up
-//		return 2;
-//	}
-//	if (800 <= adc_value && adc_value <= 900) {
-//		//Down
-//		return 3;
-//	}
-//	if (2900 <= adc_value && adc_value <= 3000) {
-//		//Right
-//		return 4;
-//	}
-//
-//	return 0;
-//}
-//
-//void change_timer() {
-//
-//	if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) && one_flag == 1 ) one_flag = 0;
-//
-//	if (change_flag == 0) {
-//		AmPm = sTime.TimeFormat;
-//
-//		hours_first = (sTime.Hours & 0xf0) >> 4;
-//		hours_second = sTime.Hours & 0xf;
-//
-//		min_first = (sTime.Minutes & 0xf0) >> 4;
-//		min_second = sTime.Minutes & 0xf;
-//
-//		sec_first = (sTime.Seconds & 0xf0) >> 4;
-//		sec_second = sTime.Seconds & 0xf;
-//		change_flag = 1;
-//	}
-//
-//	button = adc_polling();
-//
-//	switch (button) {
-//	case 1:
-//		right_left--;
-//		if (right_left <= 0)right_left = 0;
-//		break;
-//	case 4:
-//		right_left++;
-//		break;
-//	default:
-//		break;
-//	}
-//
-//
-//
-//	if (alarm_flag == 1) {
-//		switch (right_left % 7) {
-//		case 0:
-//			AM_PM_change();
-//			alarm_AmPm = AmPm;
-//			break;
-//		case 1:
-//			Hours1_change();
-//			alarm_hours_first = hours_first;
-//			break;
-//		case 2:
-//			Hours2_change();
-//			alarm_hours_second = hours_second;
-//			break;
-//		case 3:
-//			Min1_change();
-//			alarm_min_first = min_first;
-//			break;
-//		case 4:
-//			Min2_change();
-//			alarm_min_second = min_second;
-//			break;
-//		case 5:
-//			Sec1_change();
-//			alarm_sec_first = sec_first;
-//			break;
-//		case 6:
-//			Sec2_change();
-//			alarm_sec_second = sec_second;
-//			break;
-//		default:
-//			break;
-//		}
-//	}
-//	else {
-//		switch (right_left % 7) {
-//		case 0:
-//			AM_PM_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		case 1:
-//			Hours1_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		case 2:
-//			Hours2_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		case 3:
-//			Min1_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		case 4:
-//			Min2_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		case 5:
-//			Sec1_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		case 6:
-//			Sec2_change();
-//			set_time(AmPm, hours_first << 4 | hours_second,min_first << 4 | min_second, sec_first << 4 | sec_second);
-//			break;
-//		default:
-//			break;
-//		}
-//	}
-//
-//}
-//
-//
-//
-//
-//
-//void AM_PM_change() {
-//
-//	if(alarm_flag  == 1) {
-//		sprintf(temp, "%s %d%d:%d%d:%d%d   AL ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//		clock_display();
-//	}
-//
-//	sprintf(temp, "   %d%d:%d%d:%d%d   ", hours_first, hours_second, min_first,min_second, sec_first, sec_second);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//	if (adc_polling() == 2 || adc_polling() == 3) {
-//		AmPm ^= 1;
-//	}
-//
-//
-//
-//}
-//
-//void Hours1_change() {
-//
-//	sprintf(temp, "%s  %d:%d%d:%d%d   ", ampm[AmPm], hours_second, min_first,min_second, sec_first, sec_second);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//
-//	if (adc_polling() == 2 || adc_polling() == 3) {
-//		hours_first ^= 1;
-//	}
-//
-//}
-//
-//void Hours2_change() {
-//
-//	sprintf(temp, "%s %d :%d%d:%d%d   ", ampm[AmPm], hours_first, min_first,min_second, sec_first, sec_second);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//
-//	if (adc_polling() == 2) {
-//		hours_second++;
-//		if (hours_first == 1 && hours_second > 2) {
-//			hours_first = 0;
-//			hours_second = 0;
-//		} else if (hours_second > 9) {
-//			hours_second = 0;
-//		}
-//	} else if (adc_polling() == 3) {
-//		hours_second--;
-//		if (hours_first == 1 && hours_second < 0) {
-//			hours_second = 9;
-//		} else if (hours_first == 0 && hours_second < 0) {
-//			hours_first = 1;
-//			hours_second = 2;
-//		}
-//	}
-//
-//
-//}
-//
-//void Min1_change() {
-//
-//	sprintf(temp, "%s %d%d: %d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_second, sec_first, sec_second);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//
-//	if (adc_polling() == 2) {
-//		min_first++;
-//		if (min_first > 5)
-//			min_first = 0;
-//	} else if (adc_polling() == 3) {
-//		min_first--;
-//		if (min_first < 0)
-//			min_first = 5;
-//	}
-//
-//
-//}
-//
-//void Min2_change() {
-//
-//	sprintf(temp, "%s %d%d:%d :%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, sec_first, sec_second);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//
-//	if (adc_polling() == 2) {
-//		min_second++;
-//		if (min_second > 9)
-//			min_second = 0;
-//	} else if (adc_polling() == 3) {
-//		min_second--;
-//		if (min_second < 0)
-//			min_second = 9;
-//	}
-//
-//
-//}
-//
-//void Sec1_change() {
-//
-//	sprintf(temp, "%s %d%d:%d%d: %d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_second);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//
-//	if (adc_polling() == 2) {
-//		sec_first++;
-//		if (sec_first > 5)
-//			sec_first = 0;
-//	} else if (adc_polling() == 3) {
-//		sec_first--;
-//		if (sec_first < 0)
-//			sec_first = 5;
-//	}
-//
-//}
-//
-//void Sec2_change() {
-//
-//	sprintf(temp, "%s %d%d:%d%d:%d    ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first);
-//	clock_display();
-//	sprintf(temp, "%s %d%d:%d%d:%d%d   ", ampm[AmPm], hours_first, hours_second,min_first, min_second, sec_first, sec_second);
-//	clock_display();
-//
-//	if (adc_polling() == 2) {
-//		sec_second++;
-//		if (sec_second > 9)
-//			sec_second = 0;
-//	} else if (adc_polling() == 3) {
-//		sec_second--;
-//		if (sec_second < 0)
-//			sec_second = 9;
-//	}
-//}
-//
-//void set_change_time(){
-//
-//}
+//알람 노래 Three_Bears_play
+void Alarm_Three_Bears_play(){
+	/*
+	 for (int i = 0; i < bell_length; i++) {
+	 TIM3->ARR = bell[i];
+	 TIM3->CCR4 = TIM3->ARR / 2;
+	 HAL_Delay(500);
+	 TIM3->CCR4 = 0;
+	 HAL_Delay(interval[i]);
+	 TIM3->CCR4 = TIM3->ARR / 2;
+	 }
+	 */
+}
 
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
+	/* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
 	}
-  /* USER CODE END Error_Handler_Debug */
+	/* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT

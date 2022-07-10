@@ -60,8 +60,8 @@ all: main-build
 main-build: 16.BluetoothAlarmTimer.elf secondary-outputs
 
 # Tool invocations
-16.BluetoothAlarmTimer.elf 16.BluetoothAlarmTimer.map: $(OBJS) $(USER_OBJS) C:\CubeideWorkSpace\16.BluetoothAlarmTimer\STM32F429ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "16.BluetoothAlarmTimer.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\CubeideWorkSpace\16.BluetoothAlarmTimer\STM32F429ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="16.BluetoothAlarmTimer.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+16.BluetoothAlarmTimer.elf 16.BluetoothAlarmTimer.map: $(OBJS) $(USER_OBJS) D:\WorkspaceStm32\16.BluetoothAlarmTimer\STM32F429ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "16.BluetoothAlarmTimer.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\WorkspaceStm32\16.BluetoothAlarmTimer\STM32F429ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="16.BluetoothAlarmTimer.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
