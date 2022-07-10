@@ -1,0 +1,7 @@
+../Core/Src/LCD.c:16:6:I2C_Scan	112	static
+../Core/Src/LCD.c:36:19:LCD_SendInternal	32	static
+../Core/Src/LCD.c:60:6:LCD_SendCommand	16	static
+../Core/Src/LCD.c:64:6:LCD_SendData	16	static
+../Core/Src/LCD.c:68:6:LCD_Init	16	static
+../Core/Src/LCD.c:79:6:LCD_SendString	16	static
+../Core/Src/LCD.c:86:6:init	8	static
